@@ -1,57 +1,86 @@
-# YT Clipper Bot - Установка и запуск
+# YT Clipper Bot — стабильный автопостинг YouTube + TikTok
 
-## Что нужно установить:
+## Что изменено концептуально
 
-### 1. FFmpeg (обязательно!)
-Скачай с официального сайта:
+Старый подход через cookies и headless-браузер нестабилен для режима 24/7: сессии истекают, интерфейсы платформ меняются, публикация ломается без предупреждения.
+
+В проекте теперь заложен **правильный приоритет**:
+
+1. **YouTube — только через официальный YouTube Data API + OAuth refresh token**.
+2. **TikTok — через TikTok Content Posting API / Direct Post + refresh token**.
+3. `yt_cookies.txt` и `tt_cookies.txt` оставлены только как **legacy fallback**, но не как основной production-режим.
+
+## Что нужно установить
+
+### 1. FFmpeg
 - https://ffmpeg.org/download.html
-- Или для Windows: https://www.gyan.dev/ffmpeg/builds/
-- Скачай `ffmpeg-release-full.7z`, распакуй, положи `ffmpeg.exe` в PATH или рядом с ботом
+- Или Windows build: https://www.gyan.dev/ffmpeg/builds/
 
-### 2. Бот токен Telegram
-1. Найди @BotFather в Telegram
-2. `/newbot` → создай бота
-3. Скопируй токен и вставь в файл `.env`
+### 2. Telegram Bot Token
+Создай бота через @BotFather и добавь в `.env`:
 
-### 3. Cookies для YouTube (если хочешь автопостинг)
-1. Установи расширение "Get cookies.txt LOCALLY" в Chrome/Edge
-2. Зайди на youtube.com (залогинься)
-3. Нажми расширение → Export → сохрани как `yt_cookies.txt`
-4. Положи файл рядом с ботом
+```env
+BOT_TOKEN=...
+```
 
-### 4. Cookies для TikTok (если хочешь автопостинг)
-1. Установи расширение "Get cookies.txt LOCALLY" в Chrome/Edge
-2. Зайди на tiktok.com (залогинься)
-3. Нажми расширение → Export → сохрани как `tt_cookies.txt`
-4. Положи файл рядом с ботом
+### 3. Стабильный YouTube 24/7
+Создай OAuth client в Google Cloud, получи refresh token и добавь в `.env`:
 
-## Запуск:
+```env
+YT_CLIENT_ID=...
+YT_CLIENT_SECRET=...
+YT_REFRESH_TOKEN=...
+YT_PRIVACY=public
+```
+
+После этого бот будет сам обновлять access token без ручного обновления cookies.
+
+### 4. Стабильный TikTok 24/7
+Нужен доступ к TikTok Content Posting API / Direct Post. Добавь в `.env`:
+
+```env
+TT_CLIENT_KEY=...
+TT_CLIENT_SECRET=...
+TT_OPEN_ID=...
+TT_REFRESH_TOKEN=...
+TT_API_BASE_URL=https://open.tiktokapis.com
+TT_DIRECT_POST_ENABLED=1
+```
+
+После этого бот будет публиковать через API и хранить обновляемые access token локально в папке `tokens/`.
+
+## Legacy fallback
+Если ты всё ещё хочешь временно использовать cookies, положи рядом с ботом:
+- `yt_cookies.txt`
+- `tt_cookies.txt`
+
+Но это **не рекомендуется** для режима 24/7.
+
+## Запуск
+
 ```bash
 python yt_clipper_bot.py
 ```
 
-## Команды бота:
-- `/start` - начать настройку
-- `/settings` - открыть настройки
-- `/status` - статус платформ
-- `/reset` - сбросить настройки
+## Что делает бот
 
-## Как работает:
-1. Отправляешь ссылку на YouTube видео
-2. Бот качает видео и нарезает на клипы по 60 секунд
-3. Отправляет клипы в Telegram
-4. Если настроен - постит на YouTube и TikTok
+1. Принимает ссылку на YouTube-видео.
+2. Скачивает исходник через `yt-dlp`.
+3. Нарезает видео на короткие клипы 9:16.
+4. Отправляет клипы в Telegram.
+5. Автоматически публикует на YouTube и TikTok через API, если платформа настроена.
 
-## Проблемы и решения:
+## Почему это стабильнее
 
-### ffmpeg не найден
-- Скачай с https://ffmpeg.org/download.html
-- Распакуй и положи ffmpeg.exe рядом с ботом
+- Нет зависимости от живой браузерной сессии как от основного канала публикации.
+- Access token обновляются автоматически через refresh token.
+- Настройки токенов хранятся в JSON state-файлах, а не в памяти браузера.
+- Если API-вызов падает, ошибка локализуется на уровне платформы, а не ломает весь пайплайн UI-автоматизации.
 
-### Cookies не работают
-- Убедись что не выходил из аккаунта в браузере
-- Перезайди и экспортируй cookies заново
+## Практический совет для «без нареканий 24/7»
 
-### Видео не качается
-- Проверь что видео доступно и не приватное
-- Попробуй другую ссылку
+Лучший production-вариант:
+- запускать бота на VPS;
+- хранить `.env` и `tokens/` на постоянном диске;
+- использовать process manager (`systemd`, `supervisor`, Docker restart policy);
+- не полагаться на cookies как на основной способ авторизации.
