@@ -1,0 +1,11 @@
+{
+  "8095351884": {
+    "setup_done": true,
+    "watermark_path": "watermarks/8095351884.jpg",
+    "watermark_pos": "tc",
+    "watermark_size": 80,
+    "wm_type": "image",
+    "post_youtube": true,
+    "post_tiktok": true
+  }
+}
