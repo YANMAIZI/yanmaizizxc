@@ -4,9 +4,11 @@ yt_clipper_bot.py — YT Clipper Bot
 
 Что нужно для запуска:
   1. BOT_TOKEN в файле .env
-  2. yt_cookies.txt  — cookies с youtube.com (для авто-постинга YouTube)
-  3. tt_cookies.txt  — cookies с tiktok.com  (для авто-постинга TikTok)
-  4. ffmpeg в PATH   — для нарезки видео
+  2. ffmpeg в PATH
+  3. Для стабильного 24/7 автопостинга:
+     - YouTube OAuth refresh token
+     - TikTok API credentials / refresh token
+  4. yt_cookies.txt / tt_cookies.txt — только legacy fallback
 
 Запуск: python yt_clipper_bot.py
 """
@@ -126,7 +128,7 @@ def yt_status() -> str:
     return "готов"
 
 def tt_status() -> str:
-    if not tt_ok(): return "нет cookies"
+    if not tt_ok(): return "не настроен"
     return "готов"
 
 def yt_ready() -> bool:
@@ -171,15 +173,16 @@ async def ob_step_youtube(query):
     else:
         yt_file_ok = "OK" if Path(YT_COOKIES_FILE).exists() else "НЕТ"
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Как получить cookies?",   callback_data="ob:yt_help")],
-            [InlineKeyboardButton("Я положил yt_cookies.txt", callback_data="ob:yt_check")],
+            [InlineKeyboardButton("Как настроить API?",      callback_data="ob:yt_help")],
+            [InlineKeyboardButton("Я настроил YouTube",      callback_data="ob:yt_check")],
             [InlineKeyboardButton("Пропустить YouTube",       callback_data="ob:step_tiktok")],
         ])
         await query.edit_message_text(
             "Подключение YouTube\n\n"
-            "Нужен один файл: yt_cookies.txt\n\n"
-            f"Файл найден: {yt_file_ok}\n\n"
-            "Нажми «Как получить cookies?» для инструкции.",
+            "Рекомендуется OAuth refresh token.\n"
+            "Legacy cookies допустимы только как временный fallback.\n\n"
+            f"Legacy yt_cookies.txt: {yt_file_ok}\n\n"
+            "Нажми «Как настроить API?» для инструкции.",
             reply_markup=kb
         )
 
@@ -196,15 +199,16 @@ async def ob_step_tiktok(query):
     else:
         tt_file_ok = "OK" if Path(TT_COOKIES_FILE).exists() else "НЕТ"
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Как получить cookies?",    callback_data="ob:tt_help")],
-            [InlineKeyboardButton("Я положил tt_cookies.txt", callback_data="ob:tt_check")],
+            [InlineKeyboardButton("Как настроить API?",       callback_data="ob:tt_help")],
+            [InlineKeyboardButton("Я настроил TikTok",        callback_data="ob:tt_check")],
             [InlineKeyboardButton("Пропустить TikTok",        callback_data="ob:step_logo")],
         ])
         await query.edit_message_text(
             "Подключение TikTok\n\n"
-            "Нужен один файл: tt_cookies.txt\n\n"
-            f"Файл найден: {tt_file_ok}\n\n"
-            "Нажми «Как получить cookies?» для инструкции.",
+            "Рекомендуется TikTok API / Direct Post.\n"
+            "Legacy cookies допустимы только как временный fallback.\n\n"
+            f"Legacy tt_cookies.txt: {tt_file_ok}\n\n"
+            "Нажми «Как настроить API?» для инструкции.",
             reply_markup=kb
         )
 
@@ -352,19 +356,15 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Назад", callback_data="ob:start")],
         ])
         await query.edit_message_text(
-            "Как получить yt_cookies.txt\n\n"
-            "1. Установи расширение в Chrome или Edge:\n"
-            "   Get cookies.txt LOCALLY\n"
-            "   (найди в магазине расширений)\n\n"
-            "2. Зайди на youtube.com и на studio.youtube.com\n"
-            "   (желательно экспорт cookies на странице Studio,\n"
-            "   чтобы попали google.com cookies)\n\n"
-            "3. Нажми на иконку расширения\n"
-            "   Нажми Export\n\n"
-            "4. Сохрани файл как yt_cookies.txt\n"
-            "   Положи рядом с ботом\n\n"
-            "Не выходи из YouTube в браузере —\n"
-            "иначе cookies перестанут работать.",
+            "Стабильный YouTube 24/7\n\n"
+            "Рекомендуемый вариант — официальный YouTube API.\n\n"
+            "В .env добавь:\n"
+            "YT_CLIENT_ID=...\n"
+            "YT_CLIENT_SECRET=...\n"
+            "YT_REFRESH_TOKEN=...\n\n"
+            "После этого бот будет сам обновлять access token\n"
+            "и публиковать без постоянного обновления cookies.\n\n"
+            "yt_cookies.txt можно держать только как legacy fallback.",
             reply_markup=kb
         )
 
@@ -376,11 +376,10 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ob_step_tiktok(query)
         else:
             if not Path(YT_COOKIES_FILE).exists():
-                msg = "Файл yt_cookies.txt не найден рядом с ботом!"
+                msg = "YouTube не настроен: добавь YT_CLIENT_ID / YT_CLIENT_SECRET / YT_REFRESH_TOKEN в .env"
             else:
                 msg = (
-                    "В yt_cookies.txt нужны cookies YouTube и Google. "
-                    "Экспортируй со страницы studio.youtube.com."
+                    "Включён legacy fallback по cookies. Для 24/7 лучше перейти на OAuth refresh token."
                 )
             await query.answer(msg, show_alert=True)
 
@@ -392,18 +391,15 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Назад", callback_data="ob:step_tiktok")],
         ])
         await query.edit_message_text(
-            "Как получить tt_cookies.txt\n\n"
-            "1. Установи расширение в Chrome или Edge:\n"
-            "   Get cookies.txt LOCALLY\n"
-            "   (найди в магазине расширений)\n\n"
-            "2. Зайди на tiktok.com\n"
-            "   Убедись что ты залогинен\n\n"
-            "3. Нажми на иконку расширения\n"
-            "   Нажми Export\n\n"
-            "4. Сохрани файл как tt_cookies.txt\n"
-            "   Положи рядом с ботом\n\n"
-            "Не выходи из TikTok в браузере —\n"
-            "иначе cookies перестанут работать.",
+            "Стабильный TikTok 24/7\n\n"
+            "Нужен TikTok Content Posting API / Direct Post.\n\n"
+            "В .env добавь:\n"
+            "TT_CLIENT_KEY=...\n"
+            "TT_CLIENT_SECRET=...\n"
+            "TT_OPEN_ID=...\n"
+            "TT_REFRESH_TOKEN=...\n\n"
+            "Тогда бот будет публиковать через API, а не через cookies.\n"
+            "tt_cookies.txt оставляй только как аварийный fallback.",
             reply_markup=kb
         )
 
@@ -415,7 +411,7 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ob_step_logo(query, uid)
         else:
             await query.answer(
-                "Файл tt_cookies.txt не найден рядом с ботом!",
+                "TikTok не настроен: добавь API credentials / refresh token в .env",
                 show_alert=True
             )
 
@@ -463,7 +459,7 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Назад",                     callback_data="open_settings")],
         ])
         await query.edit_message_text(
-            f"YouTube\nСтатус: {yt_status()}\n\nФайл yt_cookies.txt: {yt_file}",
+            f"YouTube\nСтатус: {yt_status()}\n\nOAuth/API: {yt_cookie_diagnosis()}\nLegacy yt_cookies.txt: {yt_file}",
             reply_markup=kb
         )
 
@@ -484,7 +480,7 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Назад",                     callback_data="open_settings")],
         ])
         await query.edit_message_text(
-            f"TikTok\nСтатус: {tt_status()}\n\nФайл tt_cookies.txt: {tt_file}",
+            f"TikTok\nСтатус: {tt_status()}\n\nРекомендуется API-режим.\nLegacy tt_cookies.txt: {tt_file}",
             reply_markup=kb
         )
 
@@ -695,11 +691,9 @@ async def _process_video(update: Update, uid: int, s: dict, url: str):
 
         if s.get("post_youtube") and not yt_ready():
             await update.message.reply_text(
-                "YouTube не постится: статус «нужен вход». "
-                "В yt_cookies.txt должны быть cookies и с youtube.com, и с google.com. "
-                "Открой в браузере https://studio.youtube.com (без редиректа на вход), "
-                "затем экспортируй cookies расширением в yt_cookies.txt и перезапусти бота. "
-                "Пока это не исправлено, загрузка в YouTube пропускается."
+                "YouTube не постится: не настроен стабильный OAuth-режим. "
+                "Добавь YT_CLIENT_ID, YT_CLIENT_SECRET и YT_REFRESH_TOKEN в .env. "
+                "Cookies больше не считаются основным 24/7-решением."
             )
 
         for i, clip_path in enumerate(clips, 1):
@@ -739,9 +733,13 @@ async def _process_video(update: Update, uid: int, s: dict, url: str):
                     None, lambda p=clip_path, t=tt_title: upload_to_tiktok(uid, p, t, tags=tt_tags)
                 )
                 if res2:
-                    await sm2.edit_text(f"TikTok часть {i}: опубликовано")
+                    extra = res2.get("status_url")
+                    suffix = f"\nСтатус: {extra}" if extra else ""
+                    await sm2.edit_text(f"TikTok часть {i}: отправлено в API{suffix}")
                 else:
-                    await sm2.edit_text(f"TikTok часть {i}: ошибка. Попробуй позже или проверь tt_cookies.txt.")
+                    await sm2.edit_text(
+                        f"TikTok часть {i}: ошибка. Проверь TT_CLIENT_KEY / TT_CLIENT_SECRET / TT_OPEN_ID / TT_REFRESH_TOKEN."
+                    )
 
             if i < total:
                 await asyncio.sleep(2)
