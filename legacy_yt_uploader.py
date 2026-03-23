@@ -13,7 +13,9 @@ from urllib.parse import urlparse
 from config import (
     AUTO_HASHTAGS,
     YT_COOKIES_FILE,
+    YT_PROFILE_DIR,
     YT_PRIVACY,
+    YT_SESSION_LOGIN_WAIT_SEC,
     YT_TITLE_MAX,
     PW_PAGE_LOAD_MS,
     PW_VIDEO_PROCESS_MS,
@@ -47,6 +49,75 @@ def _abort_if_signin_page(page, where: str) -> bool:
     print(f"[yt] {_REQUIRED_HINT}")
     _screenshot(page, f"login_{where}")
     return True
+
+
+def _wait_for_manual_login(page, timeout_sec: int) -> bool:
+    """
+    Если используется постоянный профиль, даём пользователю один раз вручную
+    залогиниться в видимом браузере и затем продолжаем автоматическую загрузку.
+    """
+    print("[yt] открыта страница входа Google.")
+    print("[yt] Войди вручную в том же окне браузера. После успешного входа профиль сохранится.")
+    deadline = time.time() + max(30, timeout_sec)
+    while time.time() < deadline:
+        time.sleep(2.0)
+        cur = page.url
+        if not _is_google_account_signin_url(cur):
+            try:
+                if "studio.youtube.com" not in cur:
+                    page.goto("https://studio.youtube.com", wait_until="domcontentloaded", timeout=30000)
+                    page.wait_for_load_state("load", timeout=15000)
+                    time.sleep(1.5)
+            except Exception:
+                pass
+            if not _is_google_account_signin_url(page.url):
+                print("[yt] manual login completed, продолжаю загрузку")
+                return True
+    print(f"[yt] manual login timeout after {timeout_sec}s")
+    _screenshot(page, "manual_login_timeout")
+    return False
+
+
+def _launch_session(pw, cookies: list[dict]):
+    common_args = [
+        "--no-sandbox",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-dev-shm-usage",
+        "--window-size=1280,900",
+        "--start-maximized",
+    ]
+    context_kwargs = dict(
+        viewport={"width": 1280, "height": 900},
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+        locale="en-US",
+    )
+
+    if YT_PROFILE_DIR:
+        profile_dir = Path(YT_PROFILE_DIR)
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[yt] using persistent profile: {profile_dir}")
+        ctx = pw.chromium.launch_persistent_context(
+            user_data_dir=str(profile_dir),
+            headless=False,
+            args=common_args,
+            **context_kwargs,
+        )
+        try:
+            if cookies:
+                ctx.add_cookies(cookies)
+        except Exception as e:
+            print(f"[yt] add_cookies into persistent profile skipped: {e}")
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        return ctx, page, True
+
+    browser = pw.chromium.launch(headless=False, args=common_args)
+    ctx = browser.new_context(**context_kwargs)
+    ctx.add_cookies(cookies)
+    page = ctx.new_page()
+    return browser, page, False
 
 
 def is_configured() -> bool:
@@ -841,26 +912,7 @@ def upload_video(
     print(f"[yt] cookies для контекста: {len(cookies)} шт.")
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(
-            headless=False,   # VISIBLE — чтобы видеть что происходит
-            args=[
-                "--no-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--window-size=1280,900",
-                "--start-maximized",
-            ],
-        )
-        ctx = browser.new_context(
-            viewport={"width": 1280, "height": 900},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-            ),
-            locale="en-US",
-        )
-        ctx.add_cookies(cookies)
-        page = ctx.new_page()
+        session, page, is_persistent = _launch_session(pw, cookies)
 
         try:
             print("[yt] step: warm-up youtube.com (подхват сессии)")
@@ -869,7 +921,8 @@ def upload_video(
             time.sleep(1.0)
             print(f"[yt] URL после youtube.com: {page.url}")
             if _abort_if_signin_page(page, "youtube"):
-                return None
+                if not (is_persistent and _wait_for_manual_login(page, YT_SESSION_LOGIN_WAIT_SEC)):
+                    return None
 
             print("[yt] step: open studio.youtube.com")
             page.goto("https://studio.youtube.com", timeout=page_load_ms, wait_until="domcontentloaded")
@@ -877,6 +930,10 @@ def upload_video(
             time.sleep(2.0)
             print(f"[yt] URL после studio: {page.url}")
             if _abort_if_signin_page(page, "studio"):
+                if not (is_persistent and _wait_for_manual_login(page, YT_SESSION_LOGIN_WAIT_SEC)):
+                    return None
+
+            if _is_google_account_signin_url(page.url):
                 return None
 
             # ── Автоматически закрываем диалог «Подтверждение личности» ──────────
@@ -1087,4 +1144,4 @@ def upload_video(
                 pass
             return None
         finally:
-            browser.close()
+            session.close()

@@ -35,6 +35,15 @@ YT_PRIVACY=public
 
 После этого бот будет сам обновлять access token без ручного обновления cookies.
 
+Если официальный API пока не используешь, есть практичный fallback через **постоянный браузерный профиль**:
+
+```env
+YT_PROFILE_DIR=browser_profiles/youtube
+YT_SESSION_LOGIN_WAIT_SEC=300
+```
+
+Тогда бот откроет видимое окно браузера, ты один раз войдёшь в YouTube Studio, и дальше эта сессия будет переиспользоваться между запусками.
+
 ### 4. Стабильный TikTok 24/7
 Нужен доступ к TikTok Content Posting API / Direct Post. Добавь в `.env`:
 
@@ -49,12 +58,21 @@ TT_DIRECT_POST_ENABLED=1
 
 После этого бот будет публиковать через API и хранить обновляемые access token локально в папке `tokens/`.
 
+Для такого же режима через постоянную браузерную сессию можно указать:
+
+```env
+TT_PROFILE_DIR=browser_profiles/tiktok
+TT_SESSION_LOGIN_WAIT_SEC=300
+```
+
 ## Legacy fallback
 Если ты всё ещё хочешь временно использовать cookies, положи рядом с ботом:
 - `yt_cookies.txt`
 - `tt_cookies.txt`
 
 Но это **не рекомендуется** для режима 24/7.
+
+Лучший компромисс без API — не cookies-файлы, а именно `*_PROFILE_DIR`, потому что в этом случае бот использует сохраняемый профиль браузера, а не одноразовый экспорт cookies.
 
 ## Запуск
 

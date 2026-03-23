@@ -35,6 +35,8 @@ YT_PRIVACY = os.getenv('YT_PRIVACY', 'public')
 YT_CLIENT_ID = os.getenv('YT_CLIENT_ID', '')
 YT_CLIENT_SECRET = os.getenv('YT_CLIENT_SECRET', '')
 YT_REFRESH_TOKEN = os.getenv('YT_REFRESH_TOKEN', '')
+YT_PROFILE_DIR = os.getenv('YT_PROFILE_DIR', '')
+YT_SESSION_LOGIN_WAIT_SEC = int(os.getenv('YT_SESSION_LOGIN_WAIT_SEC', '300'))
 
 # ── TikTok ────────────────────────────────────────────────────
 TT_HASHTAGS = '#fyp #viral #shorts #нарезка #рекомендации'
@@ -46,6 +48,8 @@ TT_REFRESH_TOKEN = os.getenv('TT_REFRESH_TOKEN', '')
 TT_ACCESS_TOKEN = os.getenv('TT_ACCESS_TOKEN', '')
 TT_OPEN_ID = os.getenv('TT_OPEN_ID', '')
 TT_DIRECT_POST_ENABLED = os.getenv('TT_DIRECT_POST_ENABLED', '1') == '1'
+TT_PROFILE_DIR = os.getenv('TT_PROFILE_DIR', '')
+TT_SESSION_LOGIN_WAIT_SEC = int(os.getenv('TT_SESSION_LOGIN_WAIT_SEC', '300'))
 
 # ── Стабильность ──────────────────────────────────────────────
 SEND_TIMEOUT = 120

@@ -12,6 +12,8 @@ from pathlib import Path
 from config import (
     TT_COOKIES_FILE,
     TT_HASHTAGS,
+    TT_PROFILE_DIR,
+    TT_SESSION_LOGIN_WAIT_SEC,
     TT_TITLE_MAX,
     PW_PAGE_LOAD_MS,
     PW_VIDEO_PROCESS_MS,
@@ -92,6 +94,67 @@ def _looks_logged_out(page) -> bool:
     except Exception:
         pass
     return False
+
+
+def _wait_for_manual_login(page, timeout_sec: int) -> bool:
+    print("[tt] открыта страница входа TikTok.")
+    print("[tt] Войди вручную в том же окне браузера. После этого профиль сохранится для следующих запусков.")
+    deadline = time.time() + max(30, timeout_sec)
+    while time.time() < deadline:
+        time.sleep(2.0)
+        if not _looks_logged_out(page):
+            print("[tt] manual login completed, продолжаю загрузку")
+            return True
+        try:
+            if "tiktokstudio/upload" not in page.url.lower():
+                page.goto("https://www.tiktok.com/tiktokstudio/upload", wait_until="domcontentloaded", timeout=30000)
+                page.wait_for_load_state("load", timeout=15000)
+                time.sleep(1.5)
+        except Exception:
+            pass
+    print(f"[tt] manual login timeout after {timeout_sec}s")
+    _screenshot(page, "manual_login_timeout")
+    return False
+
+
+def _launch_session(pw, cookies: list[dict]):
+    common_args = [
+        "--no-sandbox",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-dev-shm-usage",
+    ]
+    context_kwargs = dict(
+        viewport={"width": 1280, "height": 900},
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+        locale="en-US",
+    )
+
+    if TT_PROFILE_DIR:
+        profile_dir = Path(TT_PROFILE_DIR)
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[tt] using persistent profile: {profile_dir}")
+        ctx = pw.chromium.launch_persistent_context(
+            user_data_dir=str(profile_dir),
+            headless=False,
+            args=common_args,
+            **context_kwargs,
+        )
+        try:
+            if cookies:
+                ctx.add_cookies(cookies)
+        except Exception as e:
+            print(f"[tt] add_cookies into persistent profile skipped: {e}")
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        return ctx, page, True
+
+    browser = pw.chromium.launch(headless=True, args=common_args)
+    ctx = browser.new_context(**context_kwargs)
+    ctx.add_cookies(cookies)
+    page = ctx.new_page()
+    return browser, page, False
 
 
 def _dismiss_tiktok_tour(page) -> None:
@@ -249,24 +312,7 @@ def upload_to_tiktok(
     print(f"[tt] cookies: {len(cookies)} шт.")
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-            ],
-        )
-        ctx = browser.new_context(
-            viewport={"width": 1280, "height": 900},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-            ),
-            locale="en-US",
-        )
-        ctx.add_cookies(cookies)
-        page = ctx.new_page()
+        session, page, is_persistent = _launch_session(pw, cookies)
 
         try:
             print("[tt] step: open tiktokstudio/upload")
@@ -279,9 +325,11 @@ def upload_to_tiktok(
             time.sleep(2.0)
 
             if _looks_logged_out(page):
-                print("[tt] похоже, не залогинен — обнови tt_cookies.txt")
+                print("[tt] похоже, не залогинен")
                 _screenshot(page, "logged_out")
-                return None
+                if not (is_persistent and _wait_for_manual_login(page, TT_SESSION_LOGIN_WAIT_SEC)):
+                    print("[tt] обнови tt_cookies.txt или используй TT_PROFILE_DIR для постоянной сессии")
+                    return None
 
             print("[tt] step: Upload button → file chooser")
             uploaded = False
@@ -431,4 +479,4 @@ def upload_to_tiktok(
                 pass
             return None
         finally:
-            browser.close()
+            session.close()

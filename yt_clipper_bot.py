@@ -364,6 +364,10 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "YT_REFRESH_TOKEN=...\n\n"
             "После этого бот будет сам обновлять access token\n"
             "и публиковать без постоянного обновления cookies.\n\n"
+            "Если API не используешь, добавь:\n"
+            "YT_PROFILE_DIR=browser_profiles/youtube\n\n"
+            "Тогда можно один раз войти в видимом окне браузера,\n"
+            "и бот будет переиспользовать эту сессию.\n\n"
             "yt_cookies.txt можно держать только как legacy fallback.",
             reply_markup=kb
         )
@@ -376,7 +380,7 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ob_step_tiktok(query)
         else:
             if not Path(YT_COOKIES_FILE).exists():
-                msg = "YouTube не настроен: добавь YT_CLIENT_ID / YT_CLIENT_SECRET / YT_REFRESH_TOKEN в .env"
+                msg = "YouTube не настроен: добавь OAuth в .env или укажи YT_PROFILE_DIR для постоянной браузерной сессии"
             else:
                 msg = (
                     "Включён legacy fallback по cookies. Для 24/7 лучше перейти на OAuth refresh token."
@@ -398,7 +402,11 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "TT_CLIENT_SECRET=...\n"
             "TT_OPEN_ID=...\n"
             "TT_REFRESH_TOKEN=...\n\n"
-            "Тогда бот будет публиковать через API, а не через cookies.\n"
+            "Тогда бот будет публиковать через API, а не через cookies.\n\n"
+            "Если API не используешь, добавь:\n"
+            "TT_PROFILE_DIR=browser_profiles/tiktok\n\n"
+            "Тогда можно один раз войти в видимом окне браузера,\n"
+            "и бот будет переиспользовать эту сессию.\n"
             "tt_cookies.txt оставляй только как аварийный fallback.",
             reply_markup=kb
         )
@@ -411,7 +419,7 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await ob_step_logo(query, uid)
         else:
             await query.answer(
-                "TikTok не настроен: добавь API credentials / refresh token в .env",
+                "TikTok не настроен: добавь API credentials в .env или укажи TT_PROFILE_DIR для постоянной браузерной сессии",
                 show_alert=True
             )
 
