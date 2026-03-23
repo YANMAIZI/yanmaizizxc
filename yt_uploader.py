@@ -13,6 +13,13 @@ from typing import Any
 
 import requests
 
+from legacy_yt_uploader import (
+    cookie_diagnosis as legacy_cookie_diagnosis,
+    get_channel_info as legacy_get_channel_info,
+    is_configured as legacy_is_configured,
+    is_logged_in as legacy_is_logged_in,
+    upload_video as legacy_upload_video,
+)
 from config import (
     AUTO_HASHTAGS,
     YT_CLIENT_ID,
@@ -36,28 +43,27 @@ def _has_official_oauth() -> bool:
 
 
 def is_configured() -> bool:
-    return _has_official_oauth() or Path(YT_COOKIES_FILE).exists()
+    return _has_official_oauth() or legacy_is_configured()
 
 
 def is_logged_in() -> bool:
     if _has_official_oauth():
         return True
-    return Path(YT_COOKIES_FILE).exists()
+    return legacy_is_logged_in()
 
 
 def cookie_diagnosis() -> str:
     if _has_official_oauth():
         return 'OAuth refresh token configured'
-    if Path(YT_COOKIES_FILE).exists():
-        return 'legacy cookies fallback configured'
-    return 'нет OAuth и нет yt_cookies.txt'
+    return legacy_cookie_diagnosis()
 
 
 def get_channel_info(user_id: int = 0) -> dict | None:
     if not is_logged_in():
         return None
-    mode = 'official API' if _has_official_oauth() else 'legacy cookies'
-    return {'title': f'YouTube подключён ({mode})', 'subscribers': ''}
+    if _has_official_oauth():
+        return {'title': 'YouTube подключён (official API)', 'subscribers': ''}
+    return legacy_get_channel_info(user_id)
 
 
 def _token_payload() -> dict[str, Any]:
@@ -145,9 +151,8 @@ def _upload_via_official_api(video_path: str, title: str, description: str) -> d
 
 
 def _upload_via_legacy_cookies(video_path: str, title: str, description: str) -> dict | None:
-    print('[yt] legacy cookies fallback is still available in codebase, but disabled for 24/7 stable mode.')
-    print('[yt] Configure YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN for official API uploads.')
-    return None
+    print('[yt] official API unavailable, falling back to legacy cookies uploader')
+    return legacy_upload_video(0, video_path, title, description)
 
 
 def upload_video(user_id: int, video_path: str, title: str, description: str = '', **_: Any) -> dict | None:
@@ -156,5 +161,4 @@ def upload_video(user_id: int, video_path: str, title: str, description: str = '
             return _upload_via_official_api(video_path, title, description)
         except Exception as exc:
             print(f'[yt] official API upload failed: {exc}')
-            return None
     return _upload_via_legacy_cookies(video_path, title, description)

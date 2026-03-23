@@ -13,6 +13,11 @@ from typing import Any
 
 import requests
 
+from legacy_tt_uploader import (
+    get_tiktok_user_info as legacy_get_tiktok_user_info,
+    is_configured as legacy_is_configured,
+    upload_to_tiktok as legacy_upload_to_tiktok,
+)
 from config import (
     TT_ACCESS_TOKEN,
     TT_API_BASE_URL,
@@ -36,14 +41,15 @@ def _has_api_config() -> bool:
 
 
 def is_configured() -> bool:
-    return _has_api_config() or Path(TT_COOKIES_FILE).exists()
+    return _has_api_config() or legacy_is_configured()
 
 
 def get_tiktok_user_info(user_id: int = 0) -> dict | None:
     if not is_configured():
         return None
-    mode = 'official API' if _has_api_config() else 'legacy cookies'
-    return {'display_name': f'TikTok подключён ({mode})'}
+    if _has_api_config():
+        return {'display_name': 'TikTok подключён (official API)'}
+    return legacy_get_tiktok_user_info(user_id)
 
 
 def _caption(title: str, tags: list[str] | None) -> str:
@@ -149,6 +155,5 @@ def upload_to_tiktok(user_id: int, video_path: str, title: str, tags: list[str] 
             return _upload_via_api(video_path, title, tags)
         except Exception as exc:
             print(f'[tt] official API upload failed: {exc}')
-            return None
-    print('[tt] stable 24/7 mode requires TikTok API credentials; cookies fallback is intentionally not used as primary automation path.')
-    return None
+    print('[tt] official API unavailable, falling back to legacy cookies uploader')
+    return legacy_upload_to_tiktok(user_id, video_path, title, tags=tags)
